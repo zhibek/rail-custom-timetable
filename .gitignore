@@ -1,5 +1,5 @@
 # Exclude generated data
-/src/data/stations.json
+src/data/stations.json
 
 # Logs
 logs

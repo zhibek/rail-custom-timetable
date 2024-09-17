@@ -1,3 +1,4 @@
+/* eslint-disable-next-line import/no-extraneous-dependencies */
 import fetchTrainlineStations, { collect } from 'trainline-stations';
 
 interface TrainlineStation {
