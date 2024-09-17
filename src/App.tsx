@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-import { hafasCall } from './libs/hafas';
+import { hafasCall, Journey } from './libs/hafas';
 
 import LayoutFrame from './LayoutFrame';
 import StationSelect from './StationSelect';
@@ -8,6 +8,7 @@ import StationSelect from './StationSelect';
 function App() {
   const [fromStation, setFromStation] = useState<string | null>();
   const [toStation, setToStation] = useState<string | null>();
+  const [journeys, setJourneys] = useState<Journey[]>();
 
   useEffect(() => {
     async function doHafasCall() {
@@ -16,8 +17,13 @@ function App() {
       }
       console.log(`fromStation="${fromStation}" toStation="${toStation}"`);
 
-      const result = await hafasCall();
-      console.log(result);
+      setJourneys([]);
+
+      const newJourneys = await hafasCall(fromStation, toStation);
+      console.log(newJourneys);
+      if (newJourneys) {
+        setJourneys(newJourneys);
+      }
     }
 
     void doHafasCall();
@@ -49,6 +55,16 @@ function App() {
         toStation:
         {toStation}
       </p>
+
+      <ul>
+        {(journeys)?.map((journey) => (
+          <li key={journey?.depart ?? '-'}>
+            {journey?.depart ?? '-'}
+            {' - '}
+            {journey?.arrive ?? '-'}
+          </li>
+        ))}
+      </ul>
 
     </LayoutFrame>
   );

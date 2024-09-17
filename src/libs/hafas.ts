@@ -1,5 +1,6 @@
 import md5Hex from 'md5-hex';
 import { Buffer } from 'buffer';
+import fetch from 'cross-fetch';
 
 interface HafasResponse {
   svcResL?: [
@@ -20,7 +21,16 @@ interface HafasResponse {
   ]
 }
 
+export interface Journey {
+  arrive?: string | null,
+  depart?: string | null,
+}
+
 const SALT: Buffer = Buffer.from(JSON.parse('{ "type": "Buffer", "data": [98,100,73,56,85,86,106,52,48,75,53,102,118,120,119,102]}') as WithImplicitCoercion<ArrayBuffer>);
+
+const PROXY_API_KEY = 'temp_306ab918015b2bc64135f352274fb51c'; // https://cors.sh/
+
+const PROXY_ORIGIN = 'zhibek.github.io'; // https://cors.sh/
 
 const hafasChecksum = (body: unknown, salt = SALT) => (
   md5Hex(Buffer.concat([
@@ -106,18 +116,21 @@ const hafasBody = (fromId: string, toId: string) => ({
 
 const hafasDirectUrl = (checksum: string) => (`https://reiseauskunft.bahn.de/bin/mgate.exe?checksum=${checksum}`);
 
-const hafasProxyUrl = (checksum: string) => (`https://corsproxy.io/?${encodeURIComponent(hafasDirectUrl(checksum))}`);
+const hafasProxyUrl = (checksum: string) => (`https://proxy.cors.sh/${hafasDirectUrl(checksum)}`);
+
+// const hafasProxyUrl = (checksum: string) => (`https://proxy.cors.sh/${hafasDirectUrl(checksum)}`);
 
 const hafasUrl = (checksum: string, useProxy = true) => (useProxy ? hafasProxyUrl(checksum) : hafasDirectUrl(checksum));
 
 const hafasRequest = (body: unknown, checksum: string) => ({
-  method: 'post',
+  method: 'POST',
   body: JSON.stringify(body),
   headers: {
     'Content-Type': 'application/json',
-    'Accept-Encoding': 'gzip, br, deflate',
     Accept: 'application/json',
-    'user-agent': 'die33490c2dd86rekt.bahn.guru',
+    'User-Agent': 'die33490c2dd86rekt.bahn.guru',
+    'x-cors-api-key': PROXY_API_KEY,
+    origin: PROXY_ORIGIN,
   },
   redirect: 'follow' as const,
   query: {
@@ -125,23 +138,25 @@ const hafasRequest = (body: unknown, checksum: string) => ({
   },
 });
 
-const hafasParseTime = (time: string) => (
+const hafasParseTime = (time: string): string => (
   [time.match(/.{2}/g)]
     .map(
       (timeParts) => (
         (timeParts?.length === 3) ? `${timeParts[0]}:${timeParts[1]}` : null
       ),
     )
+    .join('')
 );
 
-const hafasParseResponse = (response: HafasResponse) => (
+const hafasParseResponse = (response: HafasResponse): Journey[] => (
   response?.svcResL?.[0]?.res?.outConL?.map((item) => ({
-    depart: hafasParseTime(item?.dep?.dTimeS),
-    arrive: hafasParseTime(item?.arr?.aTimeS),
+    depart: hafasParseTime(item?.dep?.dTimeS) ?? '',
+    arrive: hafasParseTime(item?.arr?.aTimeS) ?? '',
   }))
+  ?? []
 );
 
-export const hafasCall = async (fromId = '7100017', toId = '7100127') => {
+export const hafasCall = async (fromId: string, toId: string) => {
   console.log('init hafasCall()');
 
   const body = hafasBody(fromId, toId);
@@ -151,10 +166,10 @@ export const hafasCall = async (fromId = '7100017', toId = '7100127') => {
   const request = hafasRequest(body, checksum);
 
   const response = await fetch(url, request);
+  console.log(response); // DEBUG
   const json = await response.json() as HafasResponse;
   const data = hafasParseResponse(json);
-
-  console.log(data);
+  console.log(data); // DEBUG
 
   return data;
 };
