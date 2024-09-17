@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate-data": "tsx scripts/generate-data.ts > src/data/stations.json"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -30,6 +31,8 @@
     "eslint-plugin-react": "^7.36.1",
     "eslint-plugin-react-hooks": "^4.6.2",
     "globals": "^15.9.0",
+    "trainline-stations": "^2.0.1",
+    "tsx": "^4.19.1",
     "typescript": "~5.5.3",
     "vite": "^5.4.1"
   }

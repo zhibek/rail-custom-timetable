@@ -1,3 +1,6 @@
+# Exclude generated data
+/src/data/stations.json
+
 # Logs
 logs
 *.log
