@@ -65,6 +65,7 @@ export default [
       'no-nested-ternary': 'off',
       'no-void': 'off',
       'react/jsx-filename-extension': ['warn', { extensions: ['.jsx', '.tsx'] }],
+      'react/jsx-props-no-spreading': 'off',
       'react/react-in-jsx-scope': 'off',
       'react/require-default-props': ['error', { 'functions': 'defaultArguments' }],
       'semi': ['error', 'always'],
