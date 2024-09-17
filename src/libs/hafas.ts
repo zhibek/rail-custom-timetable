@@ -1,5 +1,6 @@
 import md5Hex from 'md5-hex';
 import { Buffer } from 'buffer';
+import { format as dateFormat, parse as dateParse, add as dateAdd } from 'date-fns';
 import fetch from 'cross-fetch';
 
 interface HafasResponse {
@@ -8,22 +9,39 @@ interface HafasResponse {
       res?: {
         outConL?: [
           {
+            cid: string,
+            date: string,
+            dur: string,
+            chg: number,
             dep: {
               dTimeS: string,
+              dTZOffset: number,
             },
             arr: {
               aTimeS: string,
+              aTZOffset: number,
             },
           },
-        ]
+        ],
+        outCtxScrF: string | null,
+        outCtxScrB: string | null,
       },
     },
   ]
 }
 
 export interface Journey {
-  arrive?: string | null,
-  depart?: string | null,
+  index: string,
+  arrive: Date,
+  depart: Date,
+  duration: string,
+  changes: number,
+}
+
+export interface JourneyData {
+  journeys: Journey[],
+  nextPageToken: string | null,
+  prevPageToken: string | null,
 }
 
 const SALT: Buffer = Buffer.from(JSON.parse('{ "type": "Buffer", "data": [98,100,73,56,85,86,106,52,48,75,53,102,118,120,119,102]}') as WithImplicitCoercion<ArrayBuffer>);
@@ -39,7 +57,14 @@ const hafasChecksum = (body: unknown, salt = SALT) => (
   ]))
 );
 
-const hafasBody = (fromId: string, toId: string) => ({
+const hafasDefaultDateTime = (): Date => (
+  dateAdd(new Date(), {
+    // days: 1,
+    minutes: 40,
+  })
+);
+
+const hafasBody = (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10, pageToken: string | null = null) => ({
   lang: 'en',
   svcReqL: [
     {
@@ -49,9 +74,9 @@ const hafasBody = (fromId: string, toId: string) => ({
       },
       meth: 'TripSearch',
       req: {
-        outDate: '20240924',
-        outTime: '000000',
-        ctxScr: null,
+        outDate: dateFormat(dateTime, 'yyyyMMdd'),
+        outTime: dateFormat(dateTime, 'HHmmss'),
+        ctxScr: pageToken,
         getPasslist: false,
         maxChg: 0,
         minChgTime: 0,
@@ -85,7 +110,7 @@ const hafasBody = (fromId: string, toId: string) => ({
         getPT: true,
         getIV: false,
         getPolyline: false,
-        numF: 3,
+        numF: limit,
         outFrwd: true,
         trfReq: {
           jnyCl: 2,
@@ -138,35 +163,82 @@ const hafasRequest = (body: unknown, checksum: string) => ({
   },
 });
 
-const hafasParseTime = (time: string): string => (
-  [time.match(/.{2}/g)]
-    .map(
-      (timeParts) => (
-        (timeParts?.length === 3) ? `${timeParts[0]}:${timeParts[1]}` : null
-      ),
-    )
-    .join('')
+// const hafasParseTime = (date: string, time: string): string => (
+//   [time.match(/.{2}/g)]
+//     .map(
+//       (timeParts) => (
+//         (timeParts?.length === 3) ? `${timeParts[0]}:${timeParts[1]}`
+//           : (timeParts?.length === 4) ? `${timeParts[1]}:${timeParts[2]}` // 4 date parts indicates next day (01003000 = 00:30 +1 day)
+//             : null
+//       ),
+//     )
+//     .join('')
+// );
+
+const hafasParseDateTime = (date: string, time: string, tzOffset: number): Date => {
+  const timeParts = time.match(/.{2}/g);
+
+  const timeFormatted = (timeParts?.length === 3) ? `${timeParts[0]}:${timeParts[1]}`
+    : (timeParts?.length === 4) ? `${timeParts[1]}:${timeParts[2]}` // 4 date parts indicates next day (01003000 = 00:30 +1 day)
+      : null;
+
+  let dateTime = dateParse(`${date} ${timeFormatted} Z`, 'yyyyMMdd HH:mm X', new Date());
+
+  if (tzOffset !== 0) {
+    dateTime = dateAdd(dateTime, {
+      minutes: (0 - tzOffset),
+    });
+  }
+
+  if (timeParts?.length === 4) {
+    dateTime = dateAdd(dateTime, {
+      days: 1,
+    });
+  }
+
+  return dateTime;
+};
+
+const hafasParseDuration = (duration: string): string => {
+  const durationParts = duration.match(/.{2}/g) ?? [];
+
+  durationParts.pop(); // remove seconds
+
+  const durationFormatted = durationParts.join(':') ?? '';
+
+  return durationFormatted;
+};
+
+const hafasParseChanges = (changes: number): number => (
+  changes ?? -1
 );
 
-const hafasParseResponse = (response: HafasResponse): Journey[] => (
-  response?.svcResL?.[0]?.res?.outConL?.map((item) => ({
-    depart: hafasParseTime(item?.dep?.dTimeS) ?? '',
-    arrive: hafasParseTime(item?.arr?.aTimeS) ?? '',
-  }))
-  ?? []
-);
+const hafasParseResponse = (response: HafasResponse): JourneyData => {
+  const data = response?.svcResL?.[0]?.res;
+  console.log(JSON.stringify(data, null, 2));
+
+  return {
+    journeys: data?.outConL?.map((item) => ({
+      index: item.cid,
+      depart: hafasParseDateTime(item.date, item.dep?.dTimeS, item.dep?.dTZOffset),
+      arrive: hafasParseDateTime(item.date, item.arr?.aTimeS, item.arr?.aTZOffset),
+      duration: hafasParseDuration(item.dur),
+      changes: hafasParseChanges(item.chg),
+    })) ?? [],
+    nextPageToken: data?.outCtxScrF ?? null,
+    prevPageToken: data?.outCtxScrB ?? null,
+  };
+};
 
 export const hafasCall = async (fromId: string, toId: string) => {
   console.log('init hafasCall()');
 
   const body = hafasBody(fromId, toId);
   const checksum = hafasChecksum(body);
-  console.log(`checksum: ${checksum}`);
   const url = hafasUrl(checksum);
   const request = hafasRequest(body, checksum);
 
   const response = await fetch(url, request);
-  console.log(response); // DEBUG
   const json = await response.json() as HafasResponse;
   const data = hafasParseResponse(json);
   console.log(data); // DEBUG
