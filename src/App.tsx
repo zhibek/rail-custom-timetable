@@ -1,6 +1,6 @@
 function App() {
   return (
-    <h1>React TypeScript Template</h1>
+    <h1>Rail Custom Timetable</h1>
   );
 }
 
