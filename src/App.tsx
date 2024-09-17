@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+import { hafasCall } from './libs/hafas';
 
 import LayoutFrame from './LayoutFrame';
 import StationSelect from './StationSelect';
@@ -6,6 +8,20 @@ import StationSelect from './StationSelect';
 function App() {
   const [fromStation, setFromStation] = useState<string | null>();
   const [toStation, setToStation] = useState<string | null>();
+
+  useEffect(() => {
+    async function doHafasCall() {
+      if (!fromStation || !toStation) {
+        return;
+      }
+      console.log(`fromStation="${fromStation}" toStation="${toStation}"`);
+
+      const result = await hafasCall();
+      console.log(result);
+    }
+
+    void doHafasCall();
+  }, [fromStation, toStation]);
 
   return (
     <LayoutFrame>

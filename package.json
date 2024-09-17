@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-data": "tsx scripts/generate-data.ts > src/data/stations.json"
+    "generate-data": "tsx scripts/generate-data.ts > src/data/stations.json",
+    "hafas-call": "tsx scripts/hafas-call.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
@@ -16,6 +17,8 @@
     "@fontsource/roboto": "^5.1.0",
     "@mui/icons-material": "^6.1.0",
     "@mui/material": "^6.1.0",
+    "buffer": "^6.0.3",
+    "md5-hex": "^5.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
