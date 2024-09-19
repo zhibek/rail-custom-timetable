@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "generate-data": "tsx scripts/generate-data.ts > src/data/stations.json",
-    "hafas-call": "tsx scripts/hafas-call.ts"
+    "hafas-trip-search": "tsx scripts/hafas-trip-search.ts",
+    "hafas-station-board": "tsx scripts/hafas-station-board.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",

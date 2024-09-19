@@ -3,45 +3,14 @@ import { Buffer } from 'buffer';
 import { format as dateFormat, parse as dateParse, add as dateAdd } from 'date-fns';
 import fetch from 'cross-fetch';
 
-interface HafasTripSearchResponse {
-  svcResL?: [
+// //
+
+interface HafasResponse {
+  svcResL: [
     {
-      res?: {
-        outConL?: [
-          {
-            ctxRecon: string,
-            date: string,
-            dur: string,
-            chg: number,
-            dep: {
-              dTimeS: string,
-              dTZOffset: number,
-            },
-            arr: {
-              aTimeS: string,
-              aTZOffset: number,
-            },
-          },
-        ],
-        outCtxScrF: string | null,
-        outCtxScrB: string | null,
-      },
+      res: HafasTripSearchResult | HafasStationBoardResult,
     },
   ]
-}
-
-export interface Trip {
-  index: string,
-  arrive: Date,
-  depart: Date,
-  duration: string,
-  changes: number,
-}
-
-export interface TripSearchData {
-  trips: Trip[],
-  nextPageToken: string | null,
-  prevPageToken: string | null,
 }
 
 const SALT: Buffer = Buffer.from(JSON.parse('{ "type": "Buffer", "data": [98,100,73,56,85,86,106,52,48,75,53,102,118,120,119,102]}') as WithImplicitCoercion<ArrayBuffer>);
@@ -78,6 +47,42 @@ const hafasProxyUrl = (checksum: string) => (`https://proxy.cors.sh/${hafasDirec
 // const hafasProxyUrl = (checksum: string) => (`http://localhost:8081/?${encodeURIComponent(hafasDirectUrl(checksum))}`);
 
 const hafasUrl = (checksum: string, useProxy = true) => (useProxy ? hafasProxyUrl(checksum) : hafasDirectUrl(checksum));
+
+const hafasBuildApiBody = ({
+  meth,
+  req = {},
+  cfg = {},
+} : {
+  meth: string,
+  req: unknown,
+  cfg: unknown,
+}) => ({
+  lang: 'en',
+  svcReqL: [
+    {
+      meth, // 'TripSearch'
+      req,
+      cfg,
+    },
+  ],
+  client: {
+    id: 'DB',
+    v: '16040000',
+    type: 'IPH',
+    name: 'DB Navigator',
+  },
+  ext: 'DB.R19.04.a',
+  ver: '1.16',
+  auth: {
+    type: 'AID',
+    aid: 'n91dB8Z77MLdoR0K',
+  },
+});
+
+const hafasBuildStationObject = (stationId: string) => ({
+  type: 'S',
+  lid: `A=1@L=${stationId}@`,
+});
 
 const hafasRequest = (body: unknown, checksum: string) => ({
   method: 'POST',
@@ -116,9 +121,11 @@ const hafasMakeRequest = async (body: unknown): Promise<unknown> => {
 
   const response = await fetch(url, request);
 
-  const result = await response.json() as unknown;
+  const json = await response.json() as HafasResponse;
 
-  return result;
+  const data = json.svcResL[0].res;
+
+  return data;
 };
 
 const hafasParseDateTime = (date: string, time: string, tzOffset: number): Date => {
@@ -159,80 +166,96 @@ const hafasParseChanges = (changes: number): number => (
   changes ?? -1
 );
 
-const hafasBuildTripSearchBody = (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10, pageToken: string | null = null) => ({
-  lang: 'en',
-  svcReqL: [
+// //
+
+interface HafasTripSearchResult {
+  outConL?: [
     {
-      cfg: {
-        polyEnc: 'GPA',
-        rtMode: 'HYBRID',
+      ctxRecon: string,
+      date: string,
+      dur: string,
+      chg: number,
+      dep: {
+        dTimeS: string,
+        dTZOffset: number,
       },
-      meth: 'TripSearch',
-      req: {
-        outDate: dateFormat(dateTime, 'yyyyMMdd'),
-        outTime: dateFormat(dateTime, 'HHmmss'),
-        ctxScr: pageToken,
-        getPasslist: false,
-        maxChg: 0,
-        minChgTime: 0,
-        depLocL: [
-          {
-            type: 'S',
-            lid: `A=1@L=${fromId}@`,
-          },
-        ],
-        viaLocL: null,
-        arrLocL: [
-          {
-            type: 'S',
-            lid: `A=1@L=${toId}@`,
-          },
-        ],
-        jnyFltrL: [
-          {
-            type: 'PROD',
-            mode: 'INC',
-            value: '1023',
-          },
-          {
-            type: 'META',
-            mode: 'INC',
-            meta: 'notBarrierfree',
-          },
-        ],
-        getTariff: false,
-        ushrp: true,
-        getPT: true,
-        getIV: false,
-        getPolyline: false,
-        numF: limit,
-        outFrwd: true,
-        trfReq: {
-          jnyCl: 2,
-          tvlrProf: [
-            {
-              type: 'E',
-              redtnCard: null,
-            },
-          ],
-          cType: 'PK',
-        },
+      arr: {
+        aTimeS: string,
+        aTZOffset: number,
       },
     },
   ],
-  client: {
-    id: 'DB',
-    v: '16040000',
-    type: 'IPH',
-    name: 'DB Navigator',
-  },
-  ext: 'DB.R19.04.a',
-  ver: '1.16',
-  auth: {
-    type: 'AID',
-    aid: 'n91dB8Z77MLdoR0K',
-  },
-});
+  outCtxScrF: string | null,
+  outCtxScrB: string | null,
+}
+
+export interface Trip {
+  index: string,
+  arrive: Date,
+  depart: Date,
+  duration: string,
+  changes: number,
+}
+
+export interface TripSearchData {
+  trips: Trip[],
+  nextPageToken: string | null,
+  prevPageToken: string | null,
+}
+
+const hafasBuildTripSearchBody = (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10, pageToken: string | null = null) => (
+  hafasBuildApiBody({
+    meth: 'TripSearch',
+    req: {
+      outDate: dateFormat(dateTime, 'yyyyMMdd'),
+      outTime: dateFormat(dateTime, 'HHmmss'),
+      ctxScr: pageToken,
+      getPasslist: false,
+      maxChg: 0,
+      minChgTime: 0,
+      depLocL: [
+        hafasBuildStationObject(fromId),
+      ],
+      viaLocL: null,
+      arrLocL: [
+        hafasBuildStationObject(toId),
+      ],
+      jnyFltrL: [
+        {
+          type: 'PROD',
+          mode: 'INC',
+          value: '1023',
+        },
+        {
+          type: 'META',
+          mode: 'INC',
+          meta: 'notBarrierfree',
+        },
+      ],
+      getTariff: false,
+      ushrp: true,
+      getPT: true,
+      getIV: false,
+      getPolyline: false,
+      numF: limit,
+      outFrwd: true,
+      trfReq: {
+        jnyCl: 2,
+        tvlrProf: [
+          {
+            type: 'E',
+            redtnCard: null,
+          },
+        ],
+        cType: 'PK',
+      },
+    },
+    cfg: {
+      polyEnc: 'GPA',
+      rtMode: 'HYBRID',
+    },
+  })
+);
 
 const hafasInitTripSearchData = (): TripSearchData => ({
   trips: [],
@@ -246,28 +269,20 @@ const hafasMergeTripSearchData = (existingData: TripSearchData, newData: TripSea
   prevPageToken: newData.prevPageToken,
 });
 
-const hafasBuildTripSearchData = (response: HafasTripSearchResponse): TripSearchData => {
-  // console.log('hafasParseTripSearchResponse()');
-
-  const data = response?.svcResL?.[0]?.res;
-
-  // console.log(JSON.stringify(data, null, 2));
-
-  return {
-    trips: data?.outConL?.map((item) => ({
-      index: item.ctxRecon,
-      depart: hafasParseDateTime(item.date, item.dep?.dTimeS, item.dep?.dTZOffset),
-      arrive: hafasParseDateTime(item.date, item.arr?.aTimeS, item.arr?.aTZOffset),
-      duration: hafasParseDuration(item.dur),
-      changes: hafasParseChanges(item.chg),
-    })) ?? [],
-    nextPageToken: data?.outCtxScrF ?? null,
-    prevPageToken: data?.outCtxScrB ?? null,
-  };
-};
+const hafasBuildTripSearchData = (result: HafasTripSearchResult): TripSearchData => ({
+  trips: result?.outConL?.map((item) => ({
+    index: item.ctxRecon,
+    depart: hafasParseDateTime(item.date, item.dep?.dTimeS, item.dep?.dTZOffset),
+    arrive: hafasParseDateTime(item.date, item.arr?.aTimeS, item.arr?.aTZOffset),
+    duration: hafasParseDuration(item.dur),
+    changes: hafasParseChanges(item.chg),
+  })) ?? [],
+  nextPageToken: result?.outCtxScrF ?? null,
+  prevPageToken: result?.outCtxScrB ?? null,
+});
 
 export const hafasCallTripSearch = async (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10) => {
-  console.log('init hafasCallTripSearch()');
+  console.log('hafasCallTripSearch()');
 
   const maxApiCalls = 20;
 
@@ -281,7 +296,9 @@ export const hafasCallTripSearch = async (fromId: string, toId: string, dateTime
 
     await hafasPauseBeforeRequest(apiCalls);
 
-    const result = await hafasMakeRequest(body) as HafasTripSearchResponse;
+    const result = await hafasMakeRequest(body) as HafasTripSearchResult;
+
+    // console.log(JSON.stringify(result)); // DEBUG
 
     const newData = hafasBuildTripSearchData(result);
 
@@ -289,6 +306,77 @@ export const hafasCallTripSearch = async (fromId: string, toId: string, dateTime
     nextPageToken = data.nextPageToken;
     apiCalls += 1;
   }
+
+  console.log(data); // DEBUG
+
+  return data;
+};
+
+// //
+
+interface HafasStationBoardResult {
+  common?: {
+    locL?: [
+      {
+        extId: string,
+        name: string,
+      },
+    ],
+  },
+}
+
+export interface Station {
+  id: string,
+  name: string,
+}
+
+export interface StationBoardData {
+  stations: Station[],
+}
+
+const hafasBuildStationBoardBody = (stationId: string, type: 'DEP' | 'ARR' = 'DEP', dateTime: Date = hafasDefaultDateTime(), duration = 60) => (
+  hafasBuildApiBody({
+    meth: 'StationBoard',
+    req: {
+      type,
+      date: dateFormat(dateTime, 'yyyyMMdd'),
+      time: dateFormat(dateTime, 'HHmmss'),
+      dur: duration,
+      stbLoc: hafasBuildStationObject(stationId),
+      dirLoc: null,
+      jnyFltrL: [
+        {
+          type: 'PROD',
+          mode: 'INC',
+          value: '31',
+        },
+      ],
+      getPasslist: true,
+      stbFltrEquiv: false,
+    },
+    cfg: {
+      rtMode: 'HYBRID',
+    },
+  })
+);
+
+const hafasBuildStationBoardData = (result: HafasStationBoardResult): StationBoardData => ({
+  stations: result?.common?.locL?.map((item) => ({
+    id: item.extId,
+    name: item.name,
+  })) ?? [],
+});
+
+export const hafasCallStationBoard = async (stationId: string, type = 'DEP' as const, dateTime: Date = hafasDefaultDateTime()) => {
+  console.log('hafasCallStationBoard()');
+
+  const body = hafasBuildStationBoardBody(stationId, type, dateTime);
+
+  const result = await hafasMakeRequest(body) as HafasStationBoardResult;
+
+  // console.log(JSON.stringify(result)); // DEBUG
+
+  const data = hafasBuildStationBoardData(result);
 
   console.log(data); // DEBUG
 
