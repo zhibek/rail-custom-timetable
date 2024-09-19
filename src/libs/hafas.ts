@@ -188,8 +188,42 @@ const hafasParseChanges = (changes: number): number => (
 
 // //
 
+export interface Station {
+  id: string,
+  name: string,
+}
+
+export interface Stop {
+  station: Station | null,
+  arrive: Date | null,
+  depart: Date | null,
+}
+
+export interface Trip {
+  id: string,
+  arrive: Date | null,
+  depart: Date | null,
+  duration?: string,
+  changes?: number,
+  direction?: string,
+  stops?: Stop[],
+}
+
+export interface TripSearchData {
+  trips: Trip[],
+  nextPageToken: string | null,
+  prevPageToken: string | null,
+}
+
+export interface StationBoardData {
+  stations: Station[],
+  trips: Trip[],
+}
+
+// //
+
 interface HafasTripSearchResult {
-  outConL?: [
+  outConL: [
     {
       ctxRecon: string,
       date: string,
@@ -207,20 +241,6 @@ interface HafasTripSearchResult {
   ],
   outCtxScrF: string | null,
   outCtxScrB: string | null,
-}
-
-export interface Trip {
-  index: string,
-  arrive: Date,
-  depart: Date,
-  duration: string,
-  changes: number,
-}
-
-export interface TripSearchData {
-  trips: Trip[],
-  nextPageToken: string | null,
-  prevPageToken: string | null,
 }
 
 const hafasBuildTripSearchBody = (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10, pageToken: string | null = null) => (
@@ -290,15 +310,15 @@ const hafasMergeTripSearchData = (existingData: TripSearchData, newData: TripSea
 });
 
 const hafasBuildTripSearchData = (result: HafasTripSearchResult): TripSearchData => ({
-  trips: result?.outConL?.map((item) => ({
-    index: item.ctxRecon,
-    depart: hafasParseDateTime(item.date, item.dep?.dTimeS, item.dep?.dTZOffset),
-    arrive: hafasParseDateTime(item.date, item.arr?.aTimeS, item.arr?.aTZOffset),
-    duration: hafasParseDuration(item.dur),
-    changes: hafasParseChanges(item.chg),
+  trips: result?.outConL?.map((trip) => ({
+    id: trip.ctxRecon,
+    depart: hafasParseDateTime(trip.date, trip.dep.dTimeS, trip.dep.dTZOffset),
+    arrive: hafasParseDateTime(trip.date, trip.arr.aTimeS, trip.arr.aTZOffset),
+    duration: hafasParseDuration(trip.dur),
+    changes: hafasParseChanges(trip.chg),
   })) ?? [],
-  nextPageToken: result?.outCtxScrF ?? null,
-  prevPageToken: result?.outCtxScrB ?? null,
+  nextPageToken: result.outCtxScrF ?? null,
+  prevPageToken: result.outCtxScrB ?? null,
 });
 
 export const hafasCallTripSearch = async (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10) => {
@@ -335,23 +355,36 @@ export const hafasCallTripSearch = async (fromId: string, toId: string, dateTime
 // //
 
 interface HafasStationBoardResult {
-  common?: {
-    locL?: [
+  common: {
+    locL: [
       {
         extId: string,
         name: string,
       },
     ],
   },
-}
-
-export interface Station {
-  id: string,
-  name: string,
-}
-
-export interface StationBoardData {
-  stations: Station[],
+  jnyL: [
+    {
+      jid: string,
+      dirTxt: string,
+      date: string,
+      stbStop: {
+        aTimeS?: string,
+        aTZOffset?: number,
+        dTimeS?: string,
+        dTZOffset?: number,
+      },
+      stopL: [
+        {
+          locX: string,
+          aTimeS?: string,
+          aTZOffset?: number,
+          dTimeS?: string,
+          dTZOffset?: number,
+        },
+      ],
+    },
+  ]
 }
 
 const hafasBuildStationBoardBody = (stationId: string, type: 'DEP' | 'ARR' = 'DEP', dateTime: Date = hafasDefaultDateTime(), duration = 60) => (
@@ -380,17 +413,34 @@ const hafasBuildStationBoardBody = (stationId: string, type: 'DEP' | 'ARR' = 'DE
   })
 );
 
-const hafasBuildStationBoardData = (result: HafasStationBoardResult): StationBoardData => ({
-  stations: result?.common?.locL?.map((item) => ({
-    id: item.extId,
-    name: item.name,
-  })) ?? [],
-});
+const hafasBuildStationBoardData = (result: HafasStationBoardResult): StationBoardData => {
+  const stations = result?.common?.locL?.map((station) => ({
+    id: station.extId,
+    name: station.name,
+  })) ?? [];
 
-export const hafasCallStationBoard = async (stationId: string, type = 'DEP' as const, dateTime: Date = hafasDefaultDateTime()) => {
+  const trips = result?.jnyL?.map((trip) => ({
+    id: trip.jid,
+    direction: trip.dirTxt,
+    arrive: (trip.stbStop?.aTimeS && trip.stbStop?.aTZOffset) ? hafasParseDateTime(trip.date, trip.stbStop.aTimeS, trip.stbStop.aTZOffset) : null,
+    depart: (trip.stbStop?.dTimeS && trip.stbStop?.dTZOffset) ? hafasParseDateTime(trip.date, trip.stbStop.dTimeS, trip.stbStop.dTZOffset) : null,
+    stops: trip?.stopL?.map((stop) => ({
+      station: (stations[parseInt(stop.locX, 10) as keyof typeof stations] as Station) ?? null,
+      arrive: (stop?.aTimeS && stop?.aTZOffset) ? hafasParseDateTime(trip.date, stop.aTimeS, stop.aTZOffset) : null,
+      depart: (stop?.dTimeS && stop?.dTZOffset) ? hafasParseDateTime(trip.date, stop.dTimeS, stop.dTZOffset) : null,
+    })) ?? [],
+  })) ?? [];
+
+  return {
+    stations,
+    trips,
+  };
+};
+
+export const hafasCallStationBoard = async (stationId: string, type = 'DEP' as const, dateTime: Date = hafasDefaultDateTime(), duration = 60) => {
   console.log('hafasCallStationBoard()');
 
-  const body = hafasBuildStationBoardBody(stationId, type, dateTime);
+  const body = hafasBuildStationBoardBody(stationId, type, dateTime, duration);
 
   const result = await hafasMakeRequest(body) as HafasStationBoardResult;
 

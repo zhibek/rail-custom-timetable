@@ -64,13 +64,13 @@ function TripSearchResult({ fromStation = null, toStation = null }: { fromStatio
         </TableHead>
 
         <TableBody>
-          {(trips)?.map((trip) => (
+          {trips?.map((trip) => (
             <TableRow
-              key={trip.index}
+              key={trip.id}
               sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
             >
-              <TableCell component="th" scope="row">{formatDateTime(trip.depart)}</TableCell>
-              <TableCell component="th" scope="row">{formatDateTime(trip.arrive)}</TableCell>
+              <TableCell component="th" scope="row">{trip?.depart ? formatDateTime(trip.depart) : '-'}</TableCell>
+              <TableCell component="th" scope="row">{trip?.arrive ? formatDateTime(trip.arrive) : '-'}</TableCell>
               <TableCell align="right">{trip.duration}</TableCell>
               <TableCell align="right">{trip.changes}</TableCell>
             </TableRow>
