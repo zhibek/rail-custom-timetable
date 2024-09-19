@@ -9,7 +9,7 @@ interface HafasTripSearchResponse {
       res?: {
         outConL?: [
           {
-            cid: string,
+            ctxRecon: string,
             date: string,
             dur: string,
             chg: number,
@@ -59,8 +59,7 @@ const hafasChecksum = (body: unknown, salt = SALT) => (
 
 const hafasDefaultDateTime = (): Date => (
   dateAdd(new Date(), {
-    // days: 1,
-    minutes: 40,
+    hours: 1,
   })
 );
 
@@ -96,7 +95,19 @@ const hafasRequest = (body: unknown, checksum: string) => ({
   },
 });
 
-export const hafasMakeRequest = async (body: unknown): Promise<unknown> => {
+const hafasPauseBeforeRequest = async (attempts: number): Promise<void> => {
+  const pauseBaseDuration = 2;
+
+  const pauseDuration = (pauseBaseDuration ** attempts) * 100; // 1=100ms, 2=200ms, 3=400ms, 4=800ms, 5=1.6sec, 6=3.2sec, 7=6.4sec, 8=12.8, etc
+
+  return new Promise((resolve) => {
+    setTimeout(resolve, pauseDuration);
+  });
+};
+
+const hafasMakeRequest = async (body: unknown): Promise<unknown> => {
+  console.log('hafasMakeRequest()');
+
   const checksum = hafasChecksum(body);
 
   const url = hafasUrl(checksum);
@@ -223,15 +234,28 @@ const hafasBuildTripSearchBody = (fromId: string, toId: string, dateTime: Date =
   },
 });
 
-const hafasParseTripSearchResponse = (response: HafasTripSearchResponse): TripSearchData => {
+const hafasInitTripSearchData = (): TripSearchData => ({
+  trips: [],
+  nextPageToken: null,
+  prevPageToken: null,
+});
+
+const hafasMergeTripSearchData = (existingData: TripSearchData, newData: TripSearchData): TripSearchData => ({
+  trips: existingData.trips.concat(newData.trips),
+  nextPageToken: newData.nextPageToken,
+  prevPageToken: newData.prevPageToken,
+});
+
+const hafasBuildTripSearchData = (response: HafasTripSearchResponse): TripSearchData => {
   // console.log('hafasParseTripSearchResponse()');
 
   const data = response?.svcResL?.[0]?.res;
+
   // console.log(JSON.stringify(data, null, 2));
 
   return {
     trips: data?.outConL?.map((item) => ({
-      index: item.cid,
+      index: item.ctxRecon,
       depart: hafasParseDateTime(item.date, item.dep?.dTimeS, item.dep?.dTZOffset),
       arrive: hafasParseDateTime(item.date, item.arr?.aTimeS, item.arr?.aTZOffset),
       duration: hafasParseDuration(item.dur),
@@ -242,14 +266,30 @@ const hafasParseTripSearchResponse = (response: HafasTripSearchResponse): TripSe
   };
 };
 
-export const hafasCallTripSearch = async (fromId: string, toId: string) => {
+export const hafasCallTripSearch = async (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10) => {
   console.log('init hafasCallTripSearch()');
 
-  const body = hafasBuildTripSearchBody(fromId, toId);
+  const maxApiCalls = 20;
 
-  const result = await hafasMakeRequest(body) as HafasTripSearchResponse;
+  let data = hafasInitTripSearchData();
+  let nextPageToken: string | null = null;
+  let apiCalls = 0;
 
-  const data = hafasParseTripSearchResponse(result);
+  /* eslint-disable no-await-in-loop */
+  while (data.trips.length < limit && apiCalls < maxApiCalls) {
+    const body = hafasBuildTripSearchBody(fromId, toId, dateTime, limit, nextPageToken);
+
+    await hafasPauseBeforeRequest(apiCalls);
+
+    const result = await hafasMakeRequest(body) as HafasTripSearchResponse;
+
+    const newData = hafasBuildTripSearchData(result);
+
+    data = hafasMergeTripSearchData(data, newData);
+    nextPageToken = data.nextPageToken;
+    apiCalls += 1;
+  }
+
   console.log(data); // DEBUG
 
   return data;
