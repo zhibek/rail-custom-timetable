@@ -10,32 +10,32 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 
-import { hafasCall, Journey } from './libs/hafas';
+import { hafasCallTripSearch, Trip } from './libs/hafas';
 import { formatDateTime } from './libs/format';
 
-function JourneyResults({ fromStation = null, toStation = null }: { fromStation?: string | null, toStation?: string | null }) {
+function TripSearchResult({ fromStation = null, toStation = null }: { fromStation?: string | null, toStation?: string | null }) {
   const [loading, setLoading] = useState(false);
-  const [journeys, setJourneys] = useState<Journey[]>();
+  const [trips, setTrips] = useState<Trip[]>();
 
   useEffect(() => {
-    async function doHafasCall() {
+    async function doTripSearchCall() {
       if (!fromStation || !toStation) {
         return;
       }
       console.log(`fromStation="${fromStation}" toStation="${toStation}"`);
 
       setLoading(true);
-      setJourneys([]);
+      setTrips([]);
 
-      const newJourneys = await hafasCall(fromStation, toStation);
-      console.log(newJourneys);
+      const tripSearchResult = await hafasCallTripSearch(fromStation, toStation);
+      console.log(tripSearchResult);
       setLoading(false);
-      if (newJourneys) {
-        setJourneys(newJourneys.journeys);
+      if (tripSearchResult) {
+        setTrips(tripSearchResult.trips);
       }
     }
 
-    void doHafasCall();
+    void doTripSearchCall();
   }, [fromStation, toStation]);
 
   if (!fromStation || !toStation) {
@@ -64,15 +64,15 @@ function JourneyResults({ fromStation = null, toStation = null }: { fromStation?
         </TableHead>
 
         <TableBody>
-          {(journeys)?.map((journey) => (
+          {(trips)?.map((trip) => (
             <TableRow
-              key={journey.index}
+              key={trip.index}
               sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
             >
-              <TableCell component="th" scope="row">{formatDateTime(journey.depart)}</TableCell>
-              <TableCell component="th" scope="row">{formatDateTime(journey.arrive)}</TableCell>
-              <TableCell align="right">{journey.duration}</TableCell>
-              <TableCell align="right">{journey.changes}</TableCell>
+              <TableCell component="th" scope="row">{formatDateTime(trip.depart)}</TableCell>
+              <TableCell component="th" scope="row">{formatDateTime(trip.arrive)}</TableCell>
+              <TableCell align="right">{trip.duration}</TableCell>
+              <TableCell align="right">{trip.changes}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -82,4 +82,4 @@ function JourneyResults({ fromStation = null, toStation = null }: { fromStation?
   );
 }
 
-export default JourneyResults;
+export default TripSearchResult;

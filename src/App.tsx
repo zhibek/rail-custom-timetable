@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import LayoutFrame from './LayoutFrame';
 import StationSelect from './StationSelect';
-import JourneyResults from './JourneyResults';
+import TripSearchResult from './TripSearchResult';
 
 function App() {
   const [fromStation, setFromStation] = useState<string | null>();
@@ -25,7 +25,7 @@ function App() {
         setValue={(newStationId: string | null) => setToStation(newStationId)}
       />
 
-      <JourneyResults
+      <TripSearchResult
         fromStation={fromStation}
         toStation={toStation}
       />

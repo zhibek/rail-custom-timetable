@@ -3,7 +3,7 @@ import { Buffer } from 'buffer';
 import { format as dateFormat, parse as dateParse, add as dateAdd } from 'date-fns';
 import fetch from 'cross-fetch';
 
-interface HafasResponse {
+interface HafasTripSearchResponse {
   svcResL?: [
     {
       res?: {
@@ -30,7 +30,7 @@ interface HafasResponse {
   ]
 }
 
-export interface Journey {
+export interface Trip {
   index: string,
   arrive: Date,
   depart: Date,
@@ -38,8 +38,8 @@ export interface Journey {
   changes: number,
 }
 
-export interface JourneyData {
-  journeys: Journey[],
+export interface TripSearchData {
+  trips: Trip[],
   nextPageToken: string | null,
   prevPageToken: string | null,
 }
@@ -64,7 +64,91 @@ const hafasDefaultDateTime = (): Date => (
   })
 );
 
-const hafasBody = (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10, pageToken: string | null = null) => ({
+const hafasDirectUrl = (checksum: string) => (`https://reiseauskunft.bahn.de/bin/mgate.exe?checksum=${checksum}`);
+
+const hafasProxyUrl = (checksum: string) => (`https://proxy.cors.sh/${hafasDirectUrl(checksum)}`);
+
+// const hafasProxyUrl = (checksum: string) => (`https://corsproxy.io/?${encodeURIComponent(hafasDirectUrl(checksum))}`);
+
+// const hafasProxyUrl = (checksum: string) => (`http://localhost:8080/${hafasDirectUrl(checksum)}`);
+
+// const hafasProxyUrl = (checksum: string) => (`http://localhost:8080/https://corsproxy.io/?${encodeURIComponent(hafasDirectUrl(checksum))}`);
+
+// const hafasProxyUrl = (checksum: string) => (`http://localhost:8080/http://localhost:8081/?${encodeURIComponent(hafasDirectUrl(checksum))}`);
+
+// const hafasProxyUrl = (checksum: string) => (`http://localhost:8081/?${encodeURIComponent(hafasDirectUrl(checksum))}`);
+
+const hafasUrl = (checksum: string, useProxy = true) => (useProxy ? hafasProxyUrl(checksum) : hafasDirectUrl(checksum));
+
+const hafasRequest = (body: unknown, checksum: string) => ({
+  method: 'POST',
+  body: JSON.stringify(body),
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'User-Agent': 'die33490c2dd86rekt.bahn.guru',
+    'x-cors-api-key': PROXY_API_KEY,
+    origin: PROXY_ORIGIN,
+  },
+  redirect: 'follow' as const,
+  query: {
+    checksum,
+  },
+});
+
+export const hafasMakeRequest = async (body: unknown): Promise<unknown> => {
+  const checksum = hafasChecksum(body);
+
+  const url = hafasUrl(checksum);
+
+  const request = hafasRequest(body, checksum);
+
+  const response = await fetch(url, request);
+
+  const result = await response.json() as unknown;
+
+  return result;
+};
+
+const hafasParseDateTime = (date: string, time: string, tzOffset: number): Date => {
+  const timeParts = time.match(/.{2}/g);
+
+  const timeFormatted = (timeParts?.length === 3) ? `${timeParts[0]}:${timeParts[1]}`
+    : (timeParts?.length === 4) ? `${timeParts[1]}:${timeParts[2]}` // 4 date parts indicates next day (01003000 = 00:30 +1 day)
+      : null;
+
+  let dateTime = dateParse(`${date} ${timeFormatted} Z`, 'yyyyMMdd HH:mm X', new Date());
+
+  if (tzOffset !== 0) {
+    dateTime = dateAdd(dateTime, {
+      minutes: (0 - tzOffset),
+    });
+  }
+
+  if (timeParts?.length === 4) {
+    dateTime = dateAdd(dateTime, {
+      days: 1,
+    });
+  }
+
+  return dateTime;
+};
+
+const hafasParseDuration = (duration: string): string => {
+  const durationParts = duration.match(/.{2}/g) ?? [];
+
+  durationParts.pop(); // remove seconds
+
+  const durationFormatted = durationParts.join(':') ?? '';
+
+  return durationFormatted;
+};
+
+const hafasParseChanges = (changes: number): number => (
+  changes ?? -1
+);
+
+const hafasBuildTripSearchBody = (fromId: string, toId: string, dateTime: Date = hafasDefaultDateTime(), limit = 10, pageToken: string | null = null) => ({
   lang: 'en',
   svcReqL: [
     {
@@ -139,86 +223,14 @@ const hafasBody = (fromId: string, toId: string, dateTime: Date = hafasDefaultDa
   },
 });
 
-const hafasDirectUrl = (checksum: string) => (`https://reiseauskunft.bahn.de/bin/mgate.exe?checksum=${checksum}`);
+const hafasParseTripSearchResponse = (response: HafasTripSearchResponse): TripSearchData => {
+  // console.log('hafasParseTripSearchResponse()');
 
-const hafasProxyUrl = (checksum: string) => (`https://proxy.cors.sh/${hafasDirectUrl(checksum)}`);
-
-// const hafasProxyUrl = (checksum: string) => (`https://proxy.cors.sh/${hafasDirectUrl(checksum)}`);
-
-const hafasUrl = (checksum: string, useProxy = true) => (useProxy ? hafasProxyUrl(checksum) : hafasDirectUrl(checksum));
-
-const hafasRequest = (body: unknown, checksum: string) => ({
-  method: 'POST',
-  body: JSON.stringify(body),
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    'User-Agent': 'die33490c2dd86rekt.bahn.guru',
-    'x-cors-api-key': PROXY_API_KEY,
-    origin: PROXY_ORIGIN,
-  },
-  redirect: 'follow' as const,
-  query: {
-    checksum,
-  },
-});
-
-// const hafasParseTime = (date: string, time: string): string => (
-//   [time.match(/.{2}/g)]
-//     .map(
-//       (timeParts) => (
-//         (timeParts?.length === 3) ? `${timeParts[0]}:${timeParts[1]}`
-//           : (timeParts?.length === 4) ? `${timeParts[1]}:${timeParts[2]}` // 4 date parts indicates next day (01003000 = 00:30 +1 day)
-//             : null
-//       ),
-//     )
-//     .join('')
-// );
-
-const hafasParseDateTime = (date: string, time: string, tzOffset: number): Date => {
-  const timeParts = time.match(/.{2}/g);
-
-  const timeFormatted = (timeParts?.length === 3) ? `${timeParts[0]}:${timeParts[1]}`
-    : (timeParts?.length === 4) ? `${timeParts[1]}:${timeParts[2]}` // 4 date parts indicates next day (01003000 = 00:30 +1 day)
-      : null;
-
-  let dateTime = dateParse(`${date} ${timeFormatted} Z`, 'yyyyMMdd HH:mm X', new Date());
-
-  if (tzOffset !== 0) {
-    dateTime = dateAdd(dateTime, {
-      minutes: (0 - tzOffset),
-    });
-  }
-
-  if (timeParts?.length === 4) {
-    dateTime = dateAdd(dateTime, {
-      days: 1,
-    });
-  }
-
-  return dateTime;
-};
-
-const hafasParseDuration = (duration: string): string => {
-  const durationParts = duration.match(/.{2}/g) ?? [];
-
-  durationParts.pop(); // remove seconds
-
-  const durationFormatted = durationParts.join(':') ?? '';
-
-  return durationFormatted;
-};
-
-const hafasParseChanges = (changes: number): number => (
-  changes ?? -1
-);
-
-const hafasParseResponse = (response: HafasResponse): JourneyData => {
   const data = response?.svcResL?.[0]?.res;
-  console.log(JSON.stringify(data, null, 2));
+  // console.log(JSON.stringify(data, null, 2));
 
   return {
-    journeys: data?.outConL?.map((item) => ({
+    trips: data?.outConL?.map((item) => ({
       index: item.cid,
       depart: hafasParseDateTime(item.date, item.dep?.dTimeS, item.dep?.dTZOffset),
       arrive: hafasParseDateTime(item.date, item.arr?.aTimeS, item.arr?.aTZOffset),
@@ -230,17 +242,14 @@ const hafasParseResponse = (response: HafasResponse): JourneyData => {
   };
 };
 
-export const hafasCall = async (fromId: string, toId: string) => {
-  console.log('init hafasCall()');
+export const hafasCallTripSearch = async (fromId: string, toId: string) => {
+  console.log('init hafasCallTripSearch()');
 
-  const body = hafasBody(fromId, toId);
-  const checksum = hafasChecksum(body);
-  const url = hafasUrl(checksum);
-  const request = hafasRequest(body, checksum);
+  const body = hafasBuildTripSearchBody(fromId, toId);
 
-  const response = await fetch(url, request);
-  const json = await response.json() as HafasResponse;
-  const data = hafasParseResponse(json);
+  const result = await hafasMakeRequest(body) as HafasTripSearchResponse;
+
+  const data = hafasParseTripSearchResponse(result);
   console.log(data); // DEBUG
 
   return data;
