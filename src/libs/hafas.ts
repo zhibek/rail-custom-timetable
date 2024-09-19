@@ -5,12 +5,18 @@ import fetch from 'cross-fetch';
 
 // //
 
-interface HafasResponse {
+type HafasResponse = HafasSuccessResponse | HafasErrorResponse;
+
+interface HafasSuccessResponse {
   svcResL: [
     {
       res: HafasTripSearchResult | HafasStationBoardResult,
     },
   ]
+}
+
+interface HafasErrorResponse {
+  errTxt: string,
 }
 
 const SALT: Buffer = Buffer.from(JSON.parse('{ "type": "Buffer", "data": [98,100,73,56,85,86,106,52,48,75,53,102,118,120,119,102]}') as WithImplicitCoercion<ArrayBuffer>);
@@ -73,6 +79,14 @@ const hafasBuildApiBody = ({
   },
   ext: 'DB.R19.04.a',
   ver: '1.16',
+  // client: {
+  //   type: 'AND',
+  //   id: 'DB',
+  //   v: 21120000,
+  //   name: 'DB Navigator',
+  // },
+  // ext: 'DB.R21.12.a',
+  // ver: '1.34',
   auth: {
     type: 'AID',
     aid: 'n91dB8Z77MLdoR0K',
@@ -122,6 +136,12 @@ const hafasMakeRequest = async (body: unknown): Promise<unknown> => {
   const response = await fetch(url, request);
 
   const json = await response.json() as HafasResponse;
+
+  // console.log(JSON.stringify(json)); // DEBUG
+
+  if ('errTxt' in json) {
+    throw new Error(`Hafas API Error: ${json.errTxt}`);
+  }
 
   const data = json.svcResL[0].res;
 
@@ -351,8 +371,8 @@ const hafasBuildStationBoardBody = (stationId: string, type: 'DEP' | 'ARR' = 'DE
           value: '31',
         },
       ],
-      getPasslist: true,
-      stbFltrEquiv: false,
+      getPasslist: true, // Newer HAFAS protocol versions don't support this flag - need to call 'JourneyDetails' (trip) for each journey instead
+      stbFltrEquiv: false, // Newer HAFAS protocol versions don't support this flag - need to call 'JourneyDetails' (trip) for each journey instead
     },
     cfg: {
       rtMode: 'HYBRID',
