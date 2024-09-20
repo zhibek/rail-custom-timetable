@@ -115,9 +115,7 @@ const hafasRequest = (body: unknown, checksum: string) => ({
 });
 
 const hafasPauseBeforeRequest = async (attempts: number): Promise<void> => {
-  const pauseBaseDuration = 2;
-
-  const pauseDuration = (pauseBaseDuration ** attempts) * 100; // 1=100ms, 2=200ms, 3=400ms, 4=800ms, 5=1.6sec, 6=3.2sec, 7=6.4sec, 8=12.8, etc
+  const pauseDuration = (attempts < 3) ? 50 : (attempts < 10) ? 200 : 500;
 
   return new Promise((resolve) => {
     setTimeout(resolve, pauseDuration);
@@ -325,13 +323,14 @@ export const hafasCallTripSearch = async (fromId: string, toId: string, dateTime
   console.log('hafasCallTripSearch()');
 
   const maxApiCalls = 20;
+  const maxEmptyApiCalls = 3;
 
   let data = hafasInitTripSearchData();
   let nextPageToken: string | null = null;
   let apiCalls = 0;
 
   /* eslint-disable no-await-in-loop */
-  while (data.trips.length < limit && apiCalls < maxApiCalls) {
+  while ((data.trips.length < limit) && (apiCalls < maxApiCalls) && (data.trips.length >= 1 || apiCalls < maxEmptyApiCalls)) {
     const body = hafasBuildTripSearchBody(fromId, toId, dateTime, limit, nextPageToken);
 
     await hafasPauseBeforeRequest(apiCalls);
