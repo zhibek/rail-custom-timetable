@@ -19,22 +19,24 @@ interface StationOption {
 
 const stationsData: StationOption[] = stationsDataJson;
 
+const diatrictsRegex = /[\u0300-\u036f]/g;
+
+const normaliseText = (text: string) => (
+  text.normalize('NFD').replace(diatrictsRegex, '').toLowerCase()
+);
+
 function StationSelect({ id, label, setValue = () => {} }: { id: string, label: string, setValue?: (newValue: string | null) => void }) {
   const [options, setOptions] = useState<StationOption[]>([]);
 
   const buildOptions = (searchTerm: string): StationOption[] => {
-    const diatrictsRegex = /[\u0300-\u036f]/g;
-
-    const searchTermList = searchTerm.split(' ');
-    const searchRegexList = searchTermList.map((item) => (
-      item.trim() ? new RegExp(item.trim(), 'i') : null
-    )).filter((item) => (item));
+    const searchTermList = searchTerm.split(' ')
+      .map((searchItem) => (normaliseText(searchItem)));
 
     const stationOptions = stationsData.filter((station) => {
-      const stationNameNormalised = station.name.normalize('NFD').replace(diatrictsRegex, '');
+      const stationNameNormalised = normaliseText(station.name);
 
-      return searchRegexList.every((searchRegex) => (
-        searchRegex && stationNameNormalised.match(searchRegex)
+      return searchTermList.every((searchItem) => (
+        stationNameNormalised.includes(searchItem)
       ));
     });
 
