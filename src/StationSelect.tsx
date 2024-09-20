@@ -65,7 +65,7 @@ function StationSelect({ id, label, setValue = () => {} }: { id: string, label: 
         onInputChange={debounce(onInputChange, 100)}
         filterOptions={(x) => x}
         renderInput={(params) => (
-          <TextField {...params} id={id} variant="filled" placeholder="Select station..." />
+          <TextField {...params} id={id} variant="standard" placeholder="Select station..." />
         )}
         getOptionLabel={(station) => (station.name)}
         onChange={(_, station) => { setValue(station?.id ?? null); }}

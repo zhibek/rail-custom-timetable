@@ -11,14 +11,14 @@ import StationBoard from './StationBoard';
 function App() {
   const [tab, setTab] = useState(0);
 
-  const handleChange = (_: unknown, newTab: number) => {
+  const changeTab = (_: unknown, newTab: number) => {
     setTab(newTab);
   };
 
   return (
     <LayoutFrame>
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={tab} onChange={handleChange}>
+        <Tabs value={tab} onChange={changeTab} centered>
           <Tab label="Trip Search" />
           <Tab label="Station Board" />
         </Tabs>
