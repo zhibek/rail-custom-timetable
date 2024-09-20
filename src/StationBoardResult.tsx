@@ -10,35 +10,35 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 
-import { hafasCallTripSearch, Trip } from './libs/hafas';
+import { hafasCallStationBoard, Trip } from './libs/hafas';
 import { formatDateTime } from './libs/format';
 
-function TripSearchResult({ fromStation = null, toStation = null }: { fromStation?: string | null, toStation?: string | null }) {
+function StationBoardResult({ station = null }: { station?: string | null }) {
   const [loading, setLoading] = useState(false);
   const [trips, setTrips] = useState<Trip[]>();
 
   useEffect(() => {
     async function doTripSearchCall() {
-      if (!fromStation || !toStation) {
+      if (!station) {
         return;
       }
-      console.log(`fromStation="${fromStation}" toStation="${toStation}"`);
+      console.log(`station="${station}"`);
 
       setLoading(true);
       setTrips([]);
 
-      const tripSearchResult = await hafasCallTripSearch(fromStation, toStation);
-      console.log(tripSearchResult);
+      const stationBoardResult = await hafasCallStationBoard(station);
+      console.log(stationBoardResult);
       setLoading(false);
-      if (tripSearchResult) {
-        setTrips(tripSearchResult.trips);
+      if (stationBoardResult) {
+        setTrips(stationBoardResult.trips);
       }
     }
 
     void doTripSearchCall();
-  }, [fromStation, toStation]);
+  }, [station]);
 
-  if (!fromStation || !toStation) {
+  if (!station) {
     return null;
   }
 
@@ -57,9 +57,7 @@ function TripSearchResult({ fromStation = null, toStation = null }: { fromStatio
         <TableHead>
           <TableRow>
             <TableCell>Depart</TableCell>
-            <TableCell>Arrive</TableCell>
-            <TableCell align="right">Duration</TableCell>
-            <TableCell align="right">Changes</TableCell>
+            <TableCell align="right">Direction</TableCell>
           </TableRow>
         </TableHead>
 
@@ -70,9 +68,7 @@ function TripSearchResult({ fromStation = null, toStation = null }: { fromStatio
               sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
             >
               <TableCell component="th" scope="row">{trip?.depart ? formatDateTime(trip.depart) : '-'}</TableCell>
-              <TableCell component="th" scope="row">{trip?.arrive ? formatDateTime(trip.arrive) : '-'}</TableCell>
-              <TableCell align="right">{trip.duration}</TableCell>
-              <TableCell align="right">{trip.changes}</TableCell>
+              <TableCell align="right">{trip.direction}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -82,4 +78,4 @@ function TripSearchResult({ fromStation = null, toStation = null }: { fromStatio
   );
 }
 
-export default TripSearchResult;
+export default StationBoardResult;
