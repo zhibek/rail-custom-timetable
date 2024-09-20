@@ -15,6 +15,7 @@ if (stationsDataJson?.length <= 1) {
 interface StationOption {
   id: string,
   name: string,
+  hint: string,
 }
 
 const stationsData: StationOption[] = stationsDataJson;
@@ -34,9 +35,10 @@ function StationSelect({ id, label, setValue = () => {} }: { id: string, label: 
 
     const stationOptions = stationsData.filter((station) => {
       const stationNameNormalised = normaliseText(station.name);
+      const stationHintNormalised = normaliseText(station.hint);
 
       return searchTermList.every((searchItem) => (
-        stationNameNormalised.includes(searchItem)
+        stationNameNormalised.includes(searchItem) || stationHintNormalised.includes(searchItem)
       ));
     });
 

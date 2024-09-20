@@ -4,6 +4,7 @@ import fetchTrainlineStations, { collect } from 'trainline-stations';
 interface TrainlineStation {
   db_id: string,
   name: string,
+  'info:en'?: string,
   is_suggestable: boolean,
   is_city: boolean,
   is_main_station: boolean,
@@ -24,6 +25,7 @@ const generateData = async () => {
     .map((station) => ({
       id: station.db_id,
       name: station.name,
+      hint: station?.['info:en'] ?? '',
       country: station.country,
       // isCity: station.is_city,
       // isMain: station.is_main_station,
