@@ -56,8 +56,12 @@ function TripSearchResult({ fromStation = null, toStation = null }: { fromStatio
 
         <TableHead>
           <TableRow>
+            <TableCell>From</TableCell>
             <TableCell>Depart</TableCell>
             <TableCell>Arrive</TableCell>
+            <TableCell>To</TableCell>
+            <TableCell>Operator</TableCell>
+            <TableCell>Direction</TableCell>
             <TableCell align="right">Duration</TableCell>
             <TableCell align="right">Changes</TableCell>
           </TableRow>
@@ -69,8 +73,12 @@ function TripSearchResult({ fromStation = null, toStation = null }: { fromStatio
               key={trip.id}
               sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
             >
+              <TableCell component="th" scope="row">{trip?.from?.name ?? '-'}</TableCell>
               <TableCell component="th" scope="row">{trip?.depart ? formatDateTime(trip.depart) : '-'}</TableCell>
               <TableCell component="th" scope="row">{trip?.arrive ? formatDateTime(trip.arrive) : '-'}</TableCell>
+              <TableCell component="th" scope="row">{trip?.to?.name ?? '-'}</TableCell>
+              <TableCell>{trip?.product?.category ?? trip?.product?.operator ?? '-'}</TableCell>
+              <TableCell>{trip?.direction}</TableCell>
               <TableCell align="right">{trip.duration}</TableCell>
               <TableCell align="right">{trip.changes}</TableCell>
             </TableRow>
